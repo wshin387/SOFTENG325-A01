@@ -8,6 +8,13 @@ import java.util.Objects;
 public class Seat {
 
     // TODO Implement this class.
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+	private String label;
+	private boolean isBooked;
+	private LocalDateTime date;
+	private BigDecimal price;
 
 	public Seat() {}
 

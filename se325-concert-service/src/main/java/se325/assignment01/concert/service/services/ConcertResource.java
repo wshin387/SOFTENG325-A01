@@ -106,56 +106,56 @@ public class ConcertResource {
         return Response.ok(entity).build();
     }
 
-    @GET
-    @Path("/performers/{id}")
-    @Produces(MediaType.APPLICATION_JSON)
-    public Response getPerformerById(@PathParam("id") long id){
-
-        LOGGER.info("Retrieving performer with id: " + id);
-        Performer performer;
-        PerformerDTO performerDTO;
-        EntityManager em = PersistenceManager.instance().createEntityManager();
-
-        try {
-            em.getTransaction().begin();
-            performer = em.find(Performer.class, id);
-
-            if (performer == null) {
-                return Response.status(Response.Status.NOT_FOUND).build();
-            }
-
-            performerDTO = PerformerMapper.toDTO(performer);
-        } finally {
-            em.close();
-        }
-        return Response.ok(performerDTO).build();
-    }
-
-
-    @GET
-    @Path("/performers")
-    @Produces(MediaType.APPLICATION_JSON)
-    public Response getAllPerformers() {
-        LOGGER.info("Retrieving all Performers");
-        List<Performer> performerList = new ArrayList<>();
-        List<PerformerDTO> performerDTOList;
-        EntityManager em = PersistenceManager.instance().createEntityManager();
-
-        try{
-            em.getTransaction().begin();
-            TypedQuery<Performer> performerQuery = em.createQuery("select p from Performer p",Performer.class);
-            performerList = performerQuery.getResultList();
-            if (performerList == null){
-                return Response.status(Response.Status.NOT_FOUND).build();
-            }
-
-            em.getTransaction().commit();
-            performerDTOList = PerformerMapper.listToDTO(performerList);
-        } finally {
-            em.close();
-        }
-        return Response.ok(performerDTOList).build();
-    }
+//    @GET
+//    @Path("/performers/{id}")
+//    @Produces(MediaType.APPLICATION_JSON)
+//    public Response getPerformerById(@PathParam("id") long id){
+//
+//        LOGGER.info("Retrieving performer with id: " + id);
+//        Performer performer;
+//        PerformerDTO performerDTO;
+//        EntityManager em = PersistenceManager.instance().createEntityManager();
+//
+//        try {
+//            em.getTransaction().begin();
+//            performer = em.find(Performer.class, id);
+//
+//            if (performer == null) {
+//                return Response.status(Response.Status.NOT_FOUND).build();
+//            }
+//
+//            performerDTO = PerformerMapper.toDTO(performer);
+//        } finally {
+//            em.close();
+//        }
+//        return Response.ok(performerDTO).build();
+//    }
+//
+//
+//    @GET
+//    @Path("/performers")
+//    @Produces(MediaType.APPLICATION_JSON)
+//    public Response getAllPerformers() {
+//        LOGGER.info("Retrieving all Performers");
+//        List<Performer> performerList = new ArrayList<>();
+//        List<PerformerDTO> performerDTOList;
+//        EntityManager em = PersistenceManager.instance().createEntityManager();
+//
+//        try{
+//            em.getTransaction().begin();
+//            TypedQuery<Performer> performerQuery = em.createQuery("select p from Performer p",Performer.class);
+//            performerList = performerQuery.getResultList();
+//            if (performerList == null){
+//                return Response.status(Response.Status.NOT_FOUND).build();
+//            }
+//
+//            em.getTransaction().commit();
+//            performerDTOList = PerformerMapper.listToDTO(performerList);
+//        } finally {
+//            em.close();
+//        }
+//        return Response.ok(performerDTOList).build();
+//    }
 
     @POST
     @Path("/login")

@@ -170,12 +170,12 @@ public class ConcertResource {
             LOGGER.info("Attempting Login");
             em.getTransaction().begin();
 
-            TypedQuery<User> query = em.createQuery("select u from User u where u.username = :inputUserName AND u.password = :inputPassword", User.class)
+            TypedQuery<User> userQuery = em.createQuery("select u from User u where u.username = :inputUserName AND u.password = :inputPassword", User.class)
                 .setParameter("inputUserName", username)
                 .setParameter("inputPassword", password)
                 /*.setLockMode(LockModeType.OPTIMISTIC)*/;
 
-            User user = query.getResultList().stream().findFirst().orElse(null);
+            User user = userQuery.getResultList().stream().findFirst().orElse(null);
             if (user == null ){
                 response = Response.status(Response.Status.UNAUTHORIZED).build();
             } else {
@@ -220,7 +220,7 @@ public class ConcertResource {
         try {
             em.getTransaction().begin();
 
-            User user = getAuthenticatedUser(em, cookie);
+            User user = this.getAuthenticatedUser(em, cookie);
 
             if (user == null ) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
@@ -241,14 +241,18 @@ public class ConcertResource {
                 return Response.status(Response.Status.FORBIDDEN).build();
             }
             //get free seats and total seats for publish calculations
-            TypedQuery<Seat> availableSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked=false ", Seat.class).setParameter("requestDate", bookingRequestDTO.getDate());
+            TypedQuery<Seat> availableSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked = false ", Seat.class)
+                    .setParameter("requestDate", bookingRequestDTO.getDate());
             availableNumberOfSeats = availableSeatsQuery.getResultList().size();
-            TypedQuery<Seat> allSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate", Seat.class).setParameter("requestDate", bookingRequestDTO.getDate());
+
+            TypedQuery<Seat> allSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate", Seat.class)
+                    .setParameter("requestDate", bookingRequestDTO.getDate());
             totalNumberOfSeats = allSeatsQuery.getResultList().size();
-        }finally {
+
+        } finally {
             em.close();
         }
-        this.notifySubcribers(availableNumberOfSeats, totalNumberOfSeats, bookingRequestDTO.getConcertId(), bookingRequestDTO.getDate());
+        this.notifySubscribers(availableNumberOfSeats, totalNumberOfSeats, bookingRequestDTO.getConcertId(), bookingRequestDTO.getDate());
         return Response.created(URI.create("concert-service/bookings/"+booking.getId())).cookie(appendCookie(cookie)).build();
     }
 
@@ -259,12 +263,12 @@ public class ConcertResource {
         try {
             em.getTransaction().begin();
             // one query to get all requested seats
-            TypedQuery<Seat> query = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked = false and s.label in :seats", Seat.class)
+            TypedQuery<Seat> seatQuery = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked = false and s.label in :seats", Seat.class)
                 .setParameter("seats", bookingRequestDTO.getSeatLabels())
                 .setParameter("requestDate", bookingRequestDTO.getDate())
                 .setLockMode(LockModeType.OPTIMISTIC);
 
-            List<Seat> seatList = query.getResultList();
+            List<Seat> seatList = seatQuery.getResultList();
 
             //check if all seats are available
             if (seatList.size() != bookingRequestDTO.getSeatLabels().size()) {
@@ -302,11 +306,8 @@ public class ConcertResource {
         try{
             em.getTransaction().begin();
 
-            //check if user is authenticated
-            TypedQuery<User> userQuery = em.createQuery("select u from User u where u.cookie=:cookie", User.class);
-            userQuery.setParameter("cookie",cookie.getValue());
+            User user = this.getAuthenticatedUser(em, cookie);
 
-            User user = userQuery.getResultList().stream().findFirst().orElse(null); //gets 1 user
             if (user == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
             }
@@ -344,10 +345,8 @@ public class ConcertResource {
         try{
             em.getTransaction().begin();
 
-            TypedQuery<User> userQuery = em.createQuery("select u from User u where u.cookie=:cookie", User.class)
-                .setParameter("cookie",cookie.getValue());
+            User user = this.getAuthenticatedUser(em, cookie);
 
-            User user = userQuery.getResultList().stream().findFirst().orElse(null); //gets 1 user
             if (user == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
             }
@@ -356,6 +355,7 @@ public class ConcertResource {
             TypedQuery<Booking> bookingQuery = em.createQuery("select b from Booking b where b.user = :user", Booking.class);
             bookingQuery.setParameter("user", user);
             List<Booking> bookingList = bookingQuery.getResultList();
+
             //convert to BookingDTO
             List<BookingDTO> bookingDTOList = bookingList.stream().map(b -> BookingMapper.toDTO(b)).collect(Collectors.toList());
             entity = new GenericEntity<List<BookingDTO>>(bookingDTOList){};
@@ -384,7 +384,7 @@ public class ConcertResource {
             } else {
 
                 boolean isBooked = (bookingStatus == BookingStatus.Booked);
-                seatQuery = em.createQuery("select s from Seat s Where s.date=:date and s.isBooked=:isBooked",Seat.class)
+                seatQuery = em.createQuery("select s from Seat s Where s.date=:date and s.isBooked = :isBooked",Seat.class)
                     .setParameter("isBooked", isBooked)
                     .setParameter("date", date);
             }
@@ -423,9 +423,7 @@ public class ConcertResource {
         try {
             em.getTransaction().begin();
 
-            TypedQuery<User> userQuery = em.createQuery("select u from User u where u.cookie = :cookie", User.class)
-                    .setParameter("cookie", cookie.getValue());
-            User user = userQuery.getResultList().stream().findFirst().orElse(null); //gets a single user
+            User user = this.getAuthenticatedUser(em, cookie);
 
             if (user == null){
                 executorService.submit(()-> {
@@ -461,36 +459,39 @@ public class ConcertResource {
         }
     }
 
-    public void notifySubcribers(int numRemainingSeats, int totalSeats, long concertId, LocalDateTime date){
-        List<Subscription> subs = subscribersMap.get(concertId);
-        if (subs == null){
+    public void notifySubscribers(int availableNumberOfSeats, int totalNumberOfSeats, long concertId, LocalDateTime date){
+        List<Subscription> subscriberList = subscribersMap.get(concertId);
+        if (subscriberList == null) {
             return;
         }
-        List<Subscription> newSubs = new ArrayList<>();
-        for (Subscription sub : subs){
-            ConcertInfoSubscriptionDTO info = sub.getConcertInfoSubscriptionDTO();
-            if (info.getDate().isEqual(date)){
-                if (info.getPercentageBooked() < 100 - (numRemainingSeats*100)/totalSeats){
-                    AsyncResponse response = sub.getResponse();
-                    synchronized (response){
-                        ConcertInfoNotificationDTO notification = new ConcertInfoNotificationDTO(numRemainingSeats);
+
+        List<Subscription> newSubscriptions = new ArrayList<>();
+
+        for (Subscription subscriber : subscriberList) {
+            ConcertInfoSubscriptionDTO concertInfoSubscriptionDTO = subscriber.getConcertInfoSubscriptionDTO();
+            if (concertInfoSubscriptionDTO.getDate().isEqual(date)){
+                if (concertInfoSubscriptionDTO.getPercentageBooked() < 100 - availableNumberOfSeats * 100 / totalNumberOfSeats) {
+                    AsyncResponse response = subscriber.getResponse();
+
+                    synchronized (response) {
+                        ConcertInfoNotificationDTO notification = new ConcertInfoNotificationDTO(availableNumberOfSeats);
                         response.resume(Response.ok(notification).build());
                     }
                 } else {
-                    newSubs.add(sub);
+                    newSubscriptions.add(subscriber);
                 }
             } else {
-                newSubs.add(sub);
+                newSubscriptions.add(subscriber);
             }
         }
-        subscribersMap.put(concertId, newSubs);
+        subscribersMap.put(concertId, newSubscriptions);
     }
 }
 
-/** Encapsulates a concertInfoSubcriptionDTO and its associated async response
- *  Stored in subcriber map where it is used in notifysubscribers()
+/**
+ * The Subscription class encapsulates a tuple containing a ConcertInfoSubscriptionDTO and an AsyncResponse
  */
-class Subscription{
+class Subscription {
 
     private ConcertInfoSubscriptionDTO concertInfoSubscriptionDTO;
     private AsyncResponse response;

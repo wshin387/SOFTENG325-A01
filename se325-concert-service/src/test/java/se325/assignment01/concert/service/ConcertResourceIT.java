@@ -81,7 +81,7 @@ public class ConcertResourceIT {
 
     /**
      * A more advanced version of the test above. Makes sure the web service still functions correctly when requesting
-     * a concert with multiple performers and dates.
+     * a concert with multiple performers and dates.INSERT INTO CONCERT_DATES
      */
     @Test
     public void testGetSingleConcertWithMultiplePerformersAndDates() {

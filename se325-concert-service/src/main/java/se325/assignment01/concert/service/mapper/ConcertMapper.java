@@ -1,30 +1,34 @@
 package se325.assignment01.concert.service.mapper;
 
 import se325.assignment01.concert.common.dto.ConcertDTO;
+import se325.assignment01.concert.common.dto.ConcertSummaryDTO;
 import se325.assignment01.concert.service.domain.Concert;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class ConcertMapper {
-
-    static Concert toDomainModel(ConcertDTO dtoConcert) {
-        Concert fullConcert = new Concert(dtoConcert.getId(),
-                dtoConcert.getTitle(),
-                dtoConcert.getImageName(),
-                dtoConcert.getBlurb(),
-                dtoConcert.getDates(),
-                dtoConcert.getPerformers());
-
-        return fullConcert;
+    public static ConcertDTO toDTO(Concert concert){
+        return new ConcertDTO(concert.getId(),concert.getTitle(),concert.getImage(),concert.getBlurb());
     }
 
-    static ConcertDTO toDTO(Concert concert) {
-        ConcertDTO dtoConcert = new ConcertDTO(
-                concert.getId(),
-                concert.getTitle(),
-                concert.getImageName(),
-                concert.getBlurb()
-        );
-
-        return dtoConcert;
+    public static List<ConcertDTO> listToDTO(List<Concert> concerts) {
+        List<ConcertDTO> dtoList = new ArrayList<>();
+        for (Concert c : concerts) {
+            dtoList.add(ConcertMapper.toDTO(c));
+        }
+        return dtoList;
     }
 
+    public static ConcertSummaryDTO toSummaryDTO(Concert concert){
+        return new ConcertSummaryDTO(concert.getId(),concert.getTitle(),concert.getImage());
+    }
+
+    public static List<ConcertSummaryDTO> listToSummaryDTO(List<Concert> concerts){
+        List<ConcertSummaryDTO> dtoList = new ArrayList<>();
+        for (Concert c: concerts){
+            dtoList.add(ConcertMapper.toSummaryDTO(c));
+        }
+        return dtoList;
+    }
 }

@@ -6,7 +6,8 @@ import se325.assignment01.concert.service.domain.Booking;
 public class BookingMapper {
 
     static Booking toDomainModel(BookingDTO dtoBooking) {
-        Booking fullBooking = new Booking()
+        Booking fullBooking = new Booking();
+        return fullBooking;
     }
 
 

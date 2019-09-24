@@ -36,7 +36,7 @@ public class ConcertResource {
     private static Logger LOGGER = LoggerFactory.getLogger(ConcertResource.class);
     private ExecutorService executorService = Executors.newCachedThreadPool();
 
-    private static final Map<Long, List<Subscription>> subscriptionMap = new ConcurrentHashMap<>();
+    private static final Map<Long, List<Subscription>> subscribersMap = new ConcurrentHashMap<>();
 
     @GET
     @Path("/concerts/{id}")
@@ -195,27 +195,37 @@ public class ConcertResource {
         return response;
     }
 
+    private User getAuthenticatedUser(EntityManager em, Cookie cookie) {
+        TypedQuery<User> userQuery = em.createQuery("select u from User u where u.cookie = :cookie", User.class)
+                .setParameter("cookie", cookie.getValue());
+        User user = userQuery.getResultList().stream().findFirst().orElse(null);
+
+        return user;
+    }
+
     @POST
     @Path("/bookings")
     @Consumes(MediaType.APPLICATION_JSON)
-    public Response attemptBooking(BookingRequestDTO bookingRequestDTO, @CookieParam(Config.AUTH_COOKIE) Cookie cookie ) {
-        Booking booking;
-        int numSeatsRemaining;
-        int totalSeats;
+    public Response tryMakeBooking(BookingRequestDTO bookingRequestDTO, @CookieParam(Config.AUTH_COOKIE) Cookie cookie ) {
 
         if (cookie == null) {
             return Response.status(Response.Status.UNAUTHORIZED).build();
         }
+
+        Booking booking;
+        int availableNumberOfSeats;
+        int totalNumberOfSeats;
         EntityManager em = PersistenceManager.instance().createEntityManager();
+
         try {
             em.getTransaction().begin();
 
-            TypedQuery<User> userQuery = em.createQuery("select u from User u where u.cookie = :cookie", User.class).setParameter("cookie", cookie.getValue());
-            User user = userQuery.getResultList().stream().findFirst().orElse(null); //gets a single user
-            //User user = userQuery.getSingleResult();
-            if (user == null) {
+            User user = getAuthenticatedUser(em, cookie);
+
+            if (user == null ) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
             }
+
             //check that concert exists for given request date
             Concert concert = em.find(Concert.class, bookingRequestDTO.getConcertId());
             if (concert == null) {
@@ -225,132 +235,59 @@ public class ConcertResource {
                 return Response.status(Response.Status.BAD_REQUEST).build();
             }
             //try book the seats and persist the booking
-            booking = this.bookSeats(bookingRequestDTO, user);
+            booking = this.makeBooking(bookingRequestDTO, user);
             //booking failed and returned null because at least one requested seat as been booked
             if (booking == null){
                 return Response.status(Response.Status.FORBIDDEN).build();
             }
             //get free seats and total seats for publish calculations
-            TypedQuery<Seat> freeSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked=false ", Seat.class).setParameter("requestDate", bookingRequestDTO.getDate());
-            numSeatsRemaining = freeSeatsQuery.getResultList().size();
-            TypedQuery<Seat> totalSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate", Seat.class).setParameter("requestDate", bookingRequestDTO.getDate());
-            totalSeats = totalSeatsQuery.getResultList().size();
+            TypedQuery<Seat> availableSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked=false ", Seat.class).setParameter("requestDate", bookingRequestDTO.getDate());
+            availableNumberOfSeats = availableSeatsQuery.getResultList().size();
+            TypedQuery<Seat> allSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate", Seat.class).setParameter("requestDate", bookingRequestDTO.getDate());
+            totalNumberOfSeats = allSeatsQuery.getResultList().size();
         }finally {
             em.close();
         }
-        this.notifySubcribers(numSeatsRemaining, totalSeats, bookingRequestDTO.getConcertId(), bookingRequestDTO.getDate());
+        this.notifySubcribers(availableNumberOfSeats, totalNumberOfSeats, bookingRequestDTO.getConcertId(), bookingRequestDTO.getDate());
         return Response.created(URI.create("concert-service/bookings/"+booking.getId())).cookie(appendCookie(cookie)).build();
     }
 
-    private Booking bookSeats(BookingRequestDTO bookingRequestDTO, User user){
+    private Booking makeBooking(BookingRequestDTO bookingRequestDTO, User user){
         EntityManager em = PersistenceManager.instance().createEntityManager();
-        List<Seat> seats = new ArrayList<>();
         Booking booking;
+
         try {
             em.getTransaction().begin();
             // one query to get all requested seats
-            TypedQuery<Seat> query = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked = false and s.label in :seats", Seat.class);
-            query.setParameter("seats", bookingRequestDTO.getSeatLabels());
-            query.setParameter("requestDate", bookingRequestDTO.getDate());
-            query.setLockMode(LockModeType.OPTIMISTIC);
+            TypedQuery<Seat> query = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked = false and s.label in :seats", Seat.class)
+                .setParameter("seats", bookingRequestDTO.getSeatLabels())
+                .setParameter("requestDate", bookingRequestDTO.getDate())
+                .setLockMode(LockModeType.OPTIMISTIC);
 
-            seats = query.getResultList();
+            List<Seat> seatList = query.getResultList();
 
-            //at least one seat has been booked
-            if (seats.size() != bookingRequestDTO.getSeatLabels().size()) {
+            //check if all seats are available
+            if (seatList.size() != bookingRequestDTO.getSeatLabels().size()) {
                 return null;
             }
-            //all seats are free to book
-            for (Seat seat : seats) {
+
+            //set all seats too booked
+            for (Seat seat : seatList) {
                 seat.setBooked(true);
             }
-            booking = new Booking(bookingRequestDTO.getConcertId(), bookingRequestDTO.getDate(), seats, user);
+            booking = new Booking(bookingRequestDTO.getConcertId(), bookingRequestDTO.getDate(), seatList, user);
             em.persist(booking);
+
             em.getTransaction().commit();
-        } catch (OptimisticLockException e){
-            //retry booking
+
+        } catch (OptimisticLockException e) {
             em.close();
-            booking = this.bookSeats(bookingRequestDTO, user);
-        } finally{
+            booking = this.makeBooking(bookingRequestDTO, user); //retry
+        } finally {
             em.close();
         }
         return booking;
     }
-
-
-//    @POST
-//    @Path("/bookings")
-//    @Produces(MediaType.APPLICATION_JSON)
-//    public Response makeBooking(BookingRequestDTO bookingRequestDTO, @CookieParam(Config.AUTH_COOKIE) Cookie cookie){
-//        if (cookie == null){
-//            return Response.status(Response.Status.UNAUTHORIZED).build();
-//        }
-//
-//        Booking booking;
-//        int numberOfSeats, numberOfAvailableSeats;
-//        EntityManager em = PersistenceManager.instance().createEntityManager();
-//
-//        try {
-//            LOGGER.info("Attempting to log in");
-//            em.getTransaction().begin();
-//            TypedQuery<User> userQuery = em.createQuery("select u from User u where u.cookie = :cookie", User.class).setParameter("cookie", cookie.getValue());
-//            User user = userQuery.getResultList().stream().findFirst().orElse(null); //gets a single user
-//            //User user = userQuery.getSingleResult();
-//            if (user == null) {
-//                return Response.status(Response.Status.UNAUTHORIZED).build();
-//            }
-//
-//            LOGGER.info("Login successful");
-//
-//            Concert concert =  em.find(Concert.class, bookingRequestDTO.getConcertId());
-//            if (concert == null) {
-//                return Response.status(Response.Status.BAD_REQUEST).build();
-//            }
-//
-//            if (!concert.getDates().contains(bookingRequestDTO.getDate())){
-//                return Response.status(Response.Status.BAD_REQUEST).build();
-//            }
-//
-//            // one query to get all requested seats
-//            TypedQuery<Seat> seatQuery = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked = false and s.label in :seats", Seat.class)
-//                .setParameter("seats",bookingRequestDTO.getSeatLabels())
-//                .setParameter("requestDate",bookingRequestDTO.getDate());
-//
-//            List<Seat> seatList = seatQuery.getResultList();
-//
-//
-//            //check that all seats are available
-//            if (seatList.size() != bookingRequestDTO.getSeatLabels().size()){
-//                return Response.status(Response.Status.FORBIDDEN).build();
-//            }
-//
-//            //set all seats to booked
-//            for (Seat seat : seatList){
-//                seat.setBooked(true);
-//            }
-//
-//            //get number of remaining available seats
-//            TypedQuery<Seat> availableSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked = false ", Seat.class)
-//                    .setParameter("requestDate",bookingRequestDTO.getDate());
-//            numberOfAvailableSeats = availableSeatsQuery.getResultList().size();
-//
-//            TypedQuery<Seat> allSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate",Seat.class).setParameter("requestDate",bookingRequestDTO.getDate());
-//            numberOfSeats = allSeatsQuery.getResultList().size();
-//
-//            booking = new Booking(bookingRequestDTO.getConcertId(),bookingRequestDTO.getDate(),seatList,user);
-//            em.persist(booking);
-//            em.getTransaction().commit();
-//
-//
-//        }finally {
-//            em.close();
-//        }
-//
-//        //return Response.status(Response.Status.CREATED).build();
-//        this.notifySubcribers(numberOfAvailableSeats, numberOfSeats, bookingRequestDTO.getConcertId(), bookingRequestDTO.getDate());
-//        return Response.created(URI.create("concert-service/bookings/"+booking.getId())).cookie(appendCookie(cookie)).build();
-//    }
-
 
     @GET
     @Path("/bookings/{id}")
@@ -395,7 +332,7 @@ public class ConcertResource {
     @GET
     @Path("/bookings")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getAllBookingsForUser(@CookieParam(Config.AUTH_COOKIE)Cookie cookie){
+    public Response getAllBookingsForUser(@CookieParam(Config.AUTH_COOKIE) Cookie cookie){
         //check cookie
         if (cookie == null){
             return Response.status(Response.Status.UNAUTHORIZED).build();
@@ -475,15 +412,15 @@ public class ConcertResource {
     @Produces(MediaType.APPLICATION_JSON)
     public void concertInfoSubscribe(@Suspended AsyncResponse response, @CookieParam(Config.AUTH_COOKIE)Cookie cookie, ConcertInfoSubscriptionDTO concertInfoSubscriptionDTO){
         EntityManager em = PersistenceManager.instance().createEntityManager();
-        LOGGER.info("subscribed");
-        if (cookie == null){
-            LOGGER.info("cookie = null");
+
+        if (cookie == null) {
+            LOGGER.info("Unauthorized to subscribe");
             executorService.submit(()->{
                 response.resume(Response.status(Response.Status.UNAUTHORIZED).build());
             });
             return;
         }
-        try{
+        try {
             em.getTransaction().begin();
 
             TypedQuery<User> userQuery = em.createQuery("select u from User u where u.cookie = :cookie", User.class)
@@ -499,30 +436,33 @@ public class ConcertResource {
 
             long id = concertInfoSubscriptionDTO.getConcertId();
             Concert concert = em.find(Concert.class,id);
-            if (concert == null){
 
+            if (concert == null){
                 executorService.submit(()-> {
                     response.resume(Response.status(Response.Status.BAD_REQUEST).build());
                 });
                 return;
             }
-            if (!concert.getDates().contains(concertInfoSubscriptionDTO.getDate())){
+
+            if (!concert.getDates().contains(concertInfoSubscriptionDTO.getDate())) {
                 executorService.submit(()-> {
                     response.resume(Response.status(Response.Status.BAD_REQUEST).build());
                 });
                 return;
             }
-            //valid subscription info add sub to user
-            List<Subscription> subs = subscriptionMap.getOrDefault(concert.getId(), new ArrayList<>());
-            subs.add(new Subscription(concertInfoSubscriptionDTO, response));
-            subscriptionMap.put(concert.getId(),subs);
-        }finally {
+
+            //add Subscription to list of subscribers to concert
+            List<Subscription> subscribersList = subscribersMap.getOrDefault(concert.getId(), new ArrayList<>());
+            subscribersList.add(new Subscription(concertInfoSubscriptionDTO, response));
+            subscribersMap.put(concert.getId(), subscribersList);
+
+        } finally {
             em.close();
         }
     }
 
     public void notifySubcribers(int numRemainingSeats, int totalSeats, long concertId, LocalDateTime date){
-        List<Subscription> subs = subscriptionMap.get(concertId);
+        List<Subscription> subs = subscribersMap.get(concertId);
         if (subs == null){
             return;
         }
@@ -543,7 +483,7 @@ public class ConcertResource {
                 newSubs.add(sub);
             }
         }
-        subscriptionMap.put(concertId, newSubs);
+        subscribersMap.put(concertId, newSubs);
     }
 }
 

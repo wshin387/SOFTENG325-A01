@@ -14,7 +14,7 @@ public class Booking {
     private LocalDateTime date;
     private Long concertId;
 
-    @ManyToMany(cascade = CascadeType.PERSIST)
+    @ManyToMany(cascade = CascadeType.PERSIST, fetch = FetchType.LAZY)
     private List<Seat> seatList;
 
     @ManyToOne

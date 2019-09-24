@@ -36,7 +36,7 @@ public class BookingResource {
 
     private static Logger LOGGER = LoggerFactory.getLogger(BookingResource.class);
     private ExecutorService executorService = Executors.newCachedThreadPool();
-    private static final Map<Long, List<Subscription>> subscribersMap = new ConcurrentHashMap<>();
+    private static final Map<Long, List<Subscription>> subscribersMap = new ConcurrentHashMap<>(); //ConcertId to List of Subscriptions
 
     private User getAuthenticatedUser(EntityManager em, Cookie cookie) {
         TypedQuery<User> userQuery = em.createQuery("select u from User u where u.cookie = :cookie", User.class)
@@ -74,21 +74,27 @@ public class BookingResource {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
             }
 
-            //check that concert exists for given request date
             Concert concert = em.find(Concert.class, bookingRequestDTO.getConcertId());
+            //check concert exists with the supplied concert id
             if (concert == null) {
                 return Response.status(Response.Status.BAD_REQUEST).build();
             }
+
+            //check that date exists within concert
             if (!concert.getDates().contains(bookingRequestDTO.getDate())) {
                 return Response.status(Response.Status.BAD_REQUEST).build();
             }
-            //try book the seats and persist the booking
+
+            //try to persist booking
             booking = this.makeBooking(bookingRequestDTO, user);
-            //booking failed and returned null because at least one requested seat as been booked
+
+            //failed to make booking due to unavailability of seats
             if (booking == null){
                 return Response.status(Response.Status.FORBIDDEN).build();
             }
-            //get free seats and total seats for publish calculations
+
+            //get number of seats for concert
+            //needed to calculate availability and notify subscribers
             TypedQuery<Seat> availableSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked = false ", Seat.class)
                     .setParameter("requestDate", bookingRequestDTO.getDate());
             availableNumberOfSeats = availableSeatsQuery.getResultList().size();
@@ -100,6 +106,7 @@ public class BookingResource {
         } finally {
             em.close();
         }
+
         this.notifySubscribers(availableNumberOfSeats, totalNumberOfSeats, bookingRequestDTO.getConcertId(), bookingRequestDTO.getDate());
         return Response.created(URI.create("concert-service/bookings/"+booking.getId())).cookie(appendCookie(cookie)).build();
     }
@@ -110,12 +117,11 @@ public class BookingResource {
 
         try {
             em.getTransaction().begin();
-            // one query to get all requested seats
+
             TypedQuery<Seat> seatQuery = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked = false and s.label in :seats", Seat.class)
                     .setParameter("seats", bookingRequestDTO.getSeatLabels())
                     .setParameter("requestDate", bookingRequestDTO.getDate())
                     .setLockMode(LockModeType.OPTIMISTIC);
-
             List<Seat> seatList = seatQuery.getResultList();
 
             //check if all seats are available
@@ -145,7 +151,7 @@ public class BookingResource {
     @Path("/bookings/{id}")
     @Produces(MediaType.APPLICATION_JSON)
     public Response getBookingsByClientId(@PathParam("id") long id, @CookieParam(Config.AUTH_COOKIE) Cookie cookie){
-        if (cookie == null){
+        if (cookie == null) {
             return Response.status(Response.Status.UNAUTHORIZED).build();
         }
 
@@ -161,7 +167,7 @@ public class BookingResource {
             }
 
             Booking booking = em.find(Booking.class, id);
-            if (booking == null){
+            if (booking == null) {
                 return Response.status(Response.Status.NOT_FOUND).build();
             }
 

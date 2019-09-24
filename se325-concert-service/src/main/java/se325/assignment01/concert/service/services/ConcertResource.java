@@ -11,6 +11,7 @@ import se325.assignment01.concert.service.mapper.ConcertMapper;
 import se325.assignment01.concert.service.mapper.SeatMapper;
 
 import javax.persistence.EntityManager;
+import javax.persistence.LockModeType;
 import javax.persistence.TypedQuery;
 import javax.ws.rs.*;
 import javax.ws.rs.core.*;
@@ -84,8 +85,7 @@ public class ConcertResource {
             TypedQuery<Concert> concertQuery = em.createQuery("select c from Concert c", Concert.class);
             List<Concert> concertList = concertQuery.getResultList();
             List<ConcertSummaryDTO> concertSummaryDTOList = concertList.stream().map(c -> new ConcertSummaryDTO(c.getId(), c.getTitle(), c.getImage())).collect(Collectors.toList());
-            entity = new GenericEntity<List<ConcertSummaryDTO>>(concertSummaryDTOList) {
-            };
+            entity = new GenericEntity<List<ConcertSummaryDTO>>(concertSummaryDTOList) {};
 
         } finally {
             em.close();
@@ -97,7 +97,6 @@ public class ConcertResource {
     @POST
     @Path("/login")
     public Response login(UserDTO userDTO) {
-        NewCookie newCookie;
         String username = userDTO.getUsername();
         String password = userDTO.getPassword();
         EntityManager em = PersistenceManager.instance().createEntityManager();
@@ -110,7 +109,7 @@ public class ConcertResource {
             TypedQuery<User> userQuery = em.createQuery("select u from User u where u.username = :inputUserName AND u.password = :inputPassword", User.class)
                     .setParameter("inputUserName", username)
                     .setParameter("inputPassword", password)
-                    /*.setLockMode(LockModeType.OPTIMISTIC)*/;
+                    .setLockMode(LockModeType.OPTIMISTIC);
 
             User user = userQuery.getResultList().stream().findFirst().orElse(null);
             if (user == null) {
@@ -123,7 +122,6 @@ public class ConcertResource {
                 em.merge(user);
                 em.getTransaction().commit();
             }
-
 
         } finally {
             em.close();

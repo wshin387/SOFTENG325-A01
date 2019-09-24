@@ -29,13 +29,12 @@ public class PerformerResource {
     public Response getPerformerById(@PathParam("id") long id){
 
         LOGGER.info("Retrieving performer with id: " + id);
-        Performer performer;
         PerformerDTO performerDTO;
         EntityManager em = PersistenceManager.instance().createEntityManager();
 
         try {
             em.getTransaction().begin();
-            performer = em.find(Performer.class, id);
+            Performer performer = em.find(Performer.class, id);
 
             if (performer == null) {
                 return Response.status(Response.Status.NOT_FOUND).build();

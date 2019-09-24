@@ -157,7 +157,7 @@ public class ConcertResource {
             LOGGER.info("retrieved " + seatQuery.getResultList());
 
             List<Seat> bookedSeatList = seatQuery.getResultList();
-            List<SeatDTO> bookedDTOSeatList = bookedSeatList.stream().map(s -> SeatMapper.toDTO(s)).collect(Collectors.toList());
+            List<SeatDTO> bookedDTOSeatList = SeatMapper.listToDTO(bookedSeatList);
             entity = new GenericEntity<List<SeatDTO>>(bookedDTOSeatList) {
             };
 

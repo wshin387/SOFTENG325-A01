@@ -172,7 +172,7 @@ public class ConcertResource {
             TypedQuery<User> query = em.createQuery("select u from User u where u.username = :inputUserName AND u.password = :inputPassword", User.class)
                 .setParameter("inputUserName", username)
                 .setParameter("inputPassword", password)
-                .setLockMode(LockModeType.OPTIMISTIC);
+                /*.setLockMode(LockModeType.OPTIMISTIC)*/;
 
             User user = query.getResultList().stream().findFirst().orElse(null);
             if (user == null ){

@@ -210,8 +210,8 @@ public class BookingResource {
             bookingQuery.setParameter("user", user);
             List<Booking> bookingList = bookingQuery.getResultList();
 
-            //convert to BookingDTO
-            List<BookingDTO> bookingDTOList = bookingList.stream().map(b -> BookingMapper.toDTO(b)).collect(Collectors.toList());
+            //convert to List of BookingDTOs
+            List<BookingDTO> bookingDTOList = BookingMapper.listToDTO(bookingList);
             entity = new GenericEntity<List<BookingDTO>>(bookingDTOList){};
         } finally {
             em.close();

@@ -26,42 +26,47 @@ import java.util.stream.Collectors;
 public class ConcertResource {
 
     private static Logger LOGGER = LoggerFactory.getLogger(ConcertResource.class);
-    //private EntityManager em = PersistenceManager.instance().createEntityManager();
 
 
     @GET
     @Path("/concerts/{id}")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getConcert(@PathParam("id") long id){
+    public Response getConcertById(@PathParam("id") long id){
         LOGGER.info("Retrieving concert with id: " + id);
-        Concert concert; //domain model
-        ConcertDTO concertDTO;
+
+        Concert concert;
+
         EntityManager em = PersistenceManager.instance().createEntityManager();
         try {
             em.getTransaction().begin();
+
             concert = em.find(Concert.class, id);
+
             if (concert == null) {
                 return Response.status(Response.Status.NOT_FOUND).build();
             }
-            concertDTO = ConcertMapper.toDTO(concert);
+
         } finally {
             em.close();
         }
-        return Response.ok(concertDTO).build();
+        return Response.ok(ConcertMapper.toDTO(concert)).build();
     }
 
     @GET
     @Path("/concerts")
     @Produces(MediaType.APPLICATION_JSON)
     public Response getAllConcerts(){
+
         GenericEntity<List<ConcertDTO>> entity;
         EntityManager em = PersistenceManager.instance().createEntityManager();
+
         try{
             em.getTransaction().begin();
-            TypedQuery<Concert> query = em.createQuery("select c from Concert c", Concert.class);
-            List<Concert> allConcerts = query.getResultList();
-            List<ConcertDTO> allDTOConcerts= allConcerts.stream().map(c -> ConcertMapper.toDTO(c)).collect(Collectors.toList());
-            entity = new GenericEntity<List<ConcertDTO>>(allDTOConcerts){};
+
+            TypedQuery<Concert> concertQuery = em.createQuery("select c from Concert c", Concert.class);
+            List<Concert> concertList = concertQuery.getResultList();
+            List<ConcertDTO> concertDTOList = concertList.stream().map(c -> ConcertMapper.toDTO(c)).collect(Collectors.toList());
+            entity = new GenericEntity<List<ConcertDTO>>(concertDTOList){};
         } finally {
             em.close();
         }
@@ -72,63 +77,74 @@ public class ConcertResource {
     @Path("/concerts/summaries")
     @Produces(MediaType.APPLICATION_JSON)
     public Response getAllConcertSummaries(){
-        GenericEntity<List<ConcertSummaryDTO>> entity; //id, title, imagename
+
+        GenericEntity<List<ConcertSummaryDTO>> entity;
         EntityManager em = PersistenceManager.instance().createEntityManager();
+
         try{
             em.getTransaction().begin();
-            TypedQuery<Concert> query = em.createQuery("select c from Concert c", Concert.class);
-            List<Concert> allConcerts = query.getResultList();
-            List<ConcertSummaryDTO> allSummaries= allConcerts.stream().map(c -> new ConcertSummaryDTO(c.getId(),c.getTitle(),c.getImage()) ).collect(Collectors.toList());
-            entity = new GenericEntity<List<ConcertSummaryDTO>>(allSummaries){};
+
+            TypedQuery<Concert> concertQuery = em.createQuery("select c from Concert c", Concert.class);
+            List<Concert> concertList = concertQuery.getResultList();
+            List<ConcertSummaryDTO> concertSummaryDTOList= concertList.stream().map(c -> new ConcertSummaryDTO(c.getId(),c.getTitle(),c.getImage()) ).collect(Collectors.toList());
+            entity = new GenericEntity<List<ConcertSummaryDTO>>(concertSummaryDTOList){};
+
         } finally {
             em.close();
-        }        return Response.ok(entity).build();
+        }
+
+        return Response.ok(entity).build();
     }
 
     @GET
     @Path("/performers/{id}")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getPerformer(@PathParam("id") long id){
+    public Response getPerformerById(@PathParam("id") long id){
+
         LOGGER.info("Retrieving performer with id: " + id);
-        Performer performer; //domain model
-        PerformerDTO entity;
+        Performer performer;
+        PerformerDTO performerDTO;
         EntityManager em = PersistenceManager.instance().createEntityManager();
+
         try {
             em.getTransaction().begin();
             performer = em.find(Performer.class, id);
+
             if (performer == null) {
                 return Response.status(Response.Status.NOT_FOUND).build();
             }
-            entity = PerformerMapper.toDTO(performer);
+
+            performerDTO = PerformerMapper.toDTO(performer);
         } finally {
             em.close();
         }
-        return Response.ok(entity).build();
+        return Response.ok(performerDTO).build();
     }
 
 
     @GET
     @Path("/performers")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response retrieveAllPerformers() {
+    public Response getAllPerformers() {
         LOGGER.info("Retrieving all Performers");
-        List<Performer> performers = new ArrayList<>();
-        List<PerformerDTO> dto;
+        List<Performer> performerList = new ArrayList<>();
+        List<PerformerDTO> performerDTOList;
         EntityManager em = PersistenceManager.instance().createEntityManager();
+
         try{
             em.getTransaction().begin();
-            TypedQuery<Performer> performerQuery = em.createQuery("select c from Performer c",Performer.class);
-            performers = performerQuery.getResultList();
-            if (performers==null){
+            TypedQuery<Performer> performerQuery = em.createQuery("select p from Performer p",Performer.class);
+            performerList = performerQuery.getResultList();
+            if (performerList == null){
                 return Response.status(Response.Status.NOT_FOUND).build();
             }
+
             em.getTransaction().commit();
-            dto = PerformerMapper.listToDTO(performers);
+            performerDTOList = PerformerMapper.listToDTO(performerList);
         } finally {
-            // When you're done using the EntityManager, close it to free up resources.
             em.close();
         }
-        return Response.ok(dto).build();
+        return Response.ok(performerDTOList).build();
     }
 
     @POST
@@ -142,16 +158,13 @@ public class ConcertResource {
         try {
             LOGGER.info("Attempting Login");
             em.getTransaction().begin();
-            TypedQuery<User> concertQuery = em.createQuery("select c from User c ",User.class);
-            List<User> users = concertQuery.getResultList();
+            TypedQuery<User> userQuery = em.createQuery("select u from User u ",User.class);
+            List<User> userList = userQuery.getResultList();
 
             boolean verified = false;
             User user = null;
-            for (User u: users){
-                String currentUsername = u.getUsername();
-                String currentPassword = u.getPassword();
-
-                if ((currentPassword.equals(password)) && (currentUsername.equals(username))) {
+            for (User u: userList){
+                if ((u.getPassword().equals(password)) && (u.getUsername().equals(username))) {
                     verified = true;
                     user = u;
                     break;
@@ -159,18 +172,17 @@ public class ConcertResource {
             }
 
             if (!verified){
-                LOGGER.info("Login Failed: incorrect credentials");
+                LOGGER.info("Login failed");
                 return Response.status(Response.Status.UNAUTHORIZED).build();
             }
             LOGGER.info("Login successful");
 
-
             newCookie = new NewCookie(Config.AUTH_COOKIE, UUID.randomUUID().toString());
             user.setCookie(newCookie.getValue());
+
             em.merge(user);
             em.getTransaction().commit();
         } finally {
-            // When you're done using the EntityManager, close it to free up resources.
             em.close();
         }
 
@@ -182,7 +194,7 @@ public class ConcertResource {
     @Path("/bookings")
     @Produces(MediaType.APPLICATION_JSON)
     public Response makeBooking(BookingRequestDTO bookingRequestDTO, @CookieParam(Config.AUTH_COOKIE) Cookie cookie){
-        if (cookie==null){
+        if (cookie == null){
             return Response.status(Response.Status.UNAUTHORIZED).build();
         }
 
@@ -190,10 +202,10 @@ public class ConcertResource {
         EntityManager em = PersistenceManager.instance().createEntityManager();
 
         try {
-            LOGGER.info("Attempting Login");
+            LOGGER.info("Attempting to log in");
             em.getTransaction().begin();
             TypedQuery<User> userQuery = em.createQuery("select u from User u where u.cookie = :cookie", User.class).setParameter("cookie", cookie.getValue());
-            User user = userQuery.getResultList().stream().findFirst().orElse(null);
+            User user = userQuery.getResultList().stream().findFirst().orElse(null); //gets a single user
             //User user = userQuery.getSingleResult();
             if (user == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
@@ -210,28 +222,33 @@ public class ConcertResource {
                 return Response.status(Response.Status.BAD_REQUEST).build();
             }
 
-
             // one query to get all requested seats
-            TypedQuery<Seat> query = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked = false and s.label in :seats", Seat.class);
-            query.setParameter("seats",bookingRequestDTO.getSeatLabels());
-            query.setParameter("requestDate",bookingRequestDTO.getDate());
-            List<Seat> seats = query.getResultList();
+            TypedQuery<Seat> seatQuery = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked = false and s.label in :seats", Seat.class)
+                .setParameter("seats",bookingRequestDTO.getSeatLabels())
+                .setParameter("requestDate",bookingRequestDTO.getDate());
+
+            List<Seat> seatList = seatQuery.getResultList();
 
 
-            //at least one seat has been booked
-            if (seats.size() != bookingRequestDTO.getSeatLabels().size()){
+            //check that all seats are available
+            if (seatList.size() != bookingRequestDTO.getSeatLabels().size()){
                 return Response.status(Response.Status.FORBIDDEN).build();
             }
-            //all seats are free to book
-            for (Seat seat : seats){
+
+            //set all seats to booked
+            for (Seat seat : seatList){
                 seat.setBooked(true);
             }
-            //get number of free seats left
-            TypedQuery<Seat> freeSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked=false ", Seat.class).setParameter("requestDate",bookingRequestDTO.getDate());
-            int numSeatsRemaining = freeSeatsQuery.getResultList().size();
-            TypedQuery<Seat> totalSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate",Seat.class).setParameter("requestDate",bookingRequestDTO.getDate());
-            int totalSeats = totalSeatsQuery.getResultList().size();
-            booking = new Booking(bookingRequestDTO.getConcertId(),bookingRequestDTO.getDate(),seats,user);
+
+            //get number of remaining available seats
+            TypedQuery<Seat> availableSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked = false ", Seat.class)
+                    .setParameter("requestDate",bookingRequestDTO.getDate());
+            int numberOfAvailableSeats = availableSeatsQuery.getResultList().size();
+
+            TypedQuery<Seat> allSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate",Seat.class).setParameter("requestDate",bookingRequestDTO.getDate());
+            int numberOfSeats = allSeatsQuery.getResultList().size();
+
+            booking = new Booking(bookingRequestDTO.getConcertId(),bookingRequestDTO.getDate(),seatList,user);
             em.persist(booking);
             em.getTransaction().commit();
 
@@ -248,18 +265,21 @@ public class ConcertResource {
     @GET
     @Path("/bookings/{id}")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getBookingsForClient(@PathParam("id") long id, @CookieParam(Config.AUTH_COOKIE) Cookie cookie){
+    public Response getBookingsByClientId(@PathParam("id") long id, @CookieParam(Config.AUTH_COOKIE) Cookie cookie){
         if (cookie == null){
             return Response.status(Response.Status.UNAUTHORIZED).build();
         }
+
         BookingDTO bookingDTO;
         EntityManager em = PersistenceManager.instance().createEntityManager();
         try{
             em.getTransaction().begin();
-            //authenticate
+
+            //check if user is authenticated
             TypedQuery<User> userQuery = em.createQuery("select u from User u where u.cookie=:cookie", User.class);
             userQuery.setParameter("cookie",cookie.getValue());
-            User user = userQuery.getResultList().stream().findFirst().orElse(null);
+
+            User user = userQuery.getResultList().stream().findFirst().orElse(null); //gets 1 user
             if (user == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
             }
@@ -268,14 +288,17 @@ public class ConcertResource {
             if (booking == null){
                 return Response.status(Response.Status.NOT_FOUND).build();
             }
-            //check if user matches who made the booking
+
+            //check for forbidden request
             if (booking.getUser().getId() != user.getId()){
                 return Response.status(Response.Status.FORBIDDEN).build();
             }
+
             bookingDTO = BookingMapper.toDTO(booking);
         } finally {
             em.close();
         }
+
         return Response.ok(bookingDTO).cookie(appendCookie(cookie)).build();
     }
 
@@ -283,28 +306,32 @@ public class ConcertResource {
     @Path("/bookings")
     @Produces(MediaType.APPLICATION_JSON)
     public Response getAllBookingsForUser(@CookieParam(Config.AUTH_COOKIE)Cookie cookie){
+        //check cookie
         if (cookie == null){
             return Response.status(Response.Status.UNAUTHORIZED).build();
         }
+
         EntityManager em = PersistenceManager.instance().createEntityManager();
         GenericEntity<List<BookingDTO>> entity;
+
         try{
             em.getTransaction().begin();
-            TypedQuery<User> authQuery = em.createQuery("select u from User u where u.cookie=:cookie", User.class);
-            authQuery.setParameter("cookie",cookie.getValue());
-            User user = authQuery.getSingleResult();
+
+            TypedQuery<User> userQuery = em.createQuery("select u from User u where u.cookie=:cookie", User.class)
+                .setParameter("cookie",cookie.getValue());
+
+            User user = userQuery.getResultList().stream().findFirst().orElse(null); //gets 1 user
             if (user == null) {
                 return Response.status(Response.Status.UNAUTHORIZED).build();
             }
 
-
-            // get all bookings for user
-
+            //get all bookings
             TypedQuery<Booking> bookingQuery = em.createQuery("select b from Booking b where b.user = :user", Booking.class);
             bookingQuery.setParameter("user", user);
-            List<Booking> results = bookingQuery.getResultList();
-            List<BookingDTO> resultsDTO = results.stream().map(b -> BookingMapper.toDTO(b)).collect(Collectors.toList());
-            entity = new GenericEntity<List<BookingDTO>>(resultsDTO){};
+            List<Booking> bookingList = bookingQuery.getResultList();
+            //convert to BookingDTO
+            List<BookingDTO> bookingDTOList = bookingList.stream().map(b -> BookingMapper.toDTO(b)).collect(Collectors.toList());
+            entity = new GenericEntity<List<BookingDTO>>(bookingDTOList){};
         } finally {
             em.close();
         }
@@ -315,25 +342,32 @@ public class ConcertResource {
     @Path("/seats/{date}")
     @Produces(MediaType.APPLICATION_JSON)
     public Response getSeats(@PathParam("date")LocalDateTimeParam dateTimeParam, @QueryParam("status") BookingStatus bookingStatus){
+
         LocalDateTime date = dateTimeParam.getLocalDateTime();
         GenericEntity<List<SeatDTO>> entity;
         EntityManager em = PersistenceManager.instance().createEntityManager();
-        //get all seats for the date filtered by status
-        try{
+
+        try {
             em.getTransaction().begin();
-            TypedQuery<Seat> query;
+            TypedQuery<Seat> seatQuery; //query depends on booking status
+
             if (bookingStatus == BookingStatus.Any){
-                query = em.createQuery("select s from Seat s Where s.date=:date",Seat.class);
+                seatQuery = em.createQuery("select s from Seat s Where s.date = :date", Seat.class)
+                        .setParameter("date", date);
             } else {
-                boolean isBooked = (bookingStatus == BookingStatus.Booked) ? true : false;
-                query = em.createQuery("select s from Seat s Where s.date=:date and s.isBooked=:isBooked",Seat.class);
-                query.setParameter("isBooked", isBooked);
+
+                boolean isBooked = (bookingStatus == BookingStatus.Booked);
+                seatQuery = em.createQuery("select s from Seat s Where s.date=:date and s.isBooked=:isBooked",Seat.class)
+                    .setParameter("isBooked", isBooked)
+                    .setParameter("date", date);
             }
-            query.setParameter("date", date);
-            LOGGER.info("retrieved " + query.getResultList());
-            List<Seat> bookedSeats = query.getResultList();
-            List<SeatDTO> bookedDTOSeats= bookedSeats.stream().map(s -> SeatMapper.toDTO(s)).collect(Collectors.toList());
-            entity = new GenericEntity<List<SeatDTO>>(bookedDTOSeats){};
+
+            LOGGER.info("retrieved " + seatQuery.getResultList());
+
+            List<Seat> bookedSeatList = seatQuery.getResultList();
+            List<SeatDTO> bookedDTOSeatList = bookedSeatList.stream().map(s -> SeatMapper.toDTO(s)).collect(Collectors.toList());
+            entity = new GenericEntity<List<SeatDTO>>(bookedDTOSeatList){};
+
         } finally {
             em.close();
         }

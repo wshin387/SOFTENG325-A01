@@ -84,7 +84,7 @@ public class ConcertResource {
 
             TypedQuery<Concert> concertQuery = em.createQuery("select c from Concert c", Concert.class);
             List<Concert> concertList = concertQuery.getResultList();
-            List<ConcertSummaryDTO> concertSummaryDTOList = concertList.stream().map(c -> new ConcertSummaryDTO(c.getId(), c.getTitle(), c.getImage())).collect(Collectors.toList());
+            List<ConcertSummaryDTO> concertSummaryDTOList = ConcertMapper.listToSummaryDTO(concertList);
             entity = new GenericEntity<List<ConcertSummaryDTO>>(concertSummaryDTOList) {};
 
         } finally {

@@ -18,9 +18,9 @@ public class ConcertMapper {
         return result;
     }
 
-    public static List<ConcertDTO> listToDTO(List<Concert> concerts) {
+    public static List<ConcertDTO> listToDTO(List<Concert> concertList) {
         List<ConcertDTO> dtoList = new ArrayList<>();
-        for (Concert c : concerts) {
+        for (Concert c : concertList) {
             dtoList.add(ConcertMapper.toDTO(c));
         }
         return dtoList;
@@ -31,10 +31,10 @@ public class ConcertMapper {
     }
 
     public static List<ConcertSummaryDTO> listToSummaryDTO(List<Concert> concerts){
-        List<ConcertSummaryDTO> dtoList = new ArrayList<>();
+        List<ConcertSummaryDTO> result = new ArrayList<>();
         for (Concert c: concerts){
-            dtoList.add(ConcertMapper.toSummaryDTO(c));
+            result.add(ConcertMapper.toSummaryDTO(c));
         }
-        return dtoList;
+        return result;
     }
 }

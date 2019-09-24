@@ -4,30 +4,19 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import se325.assignment01.concert.common.dto.*;
 import se325.assignment01.concert.common.types.BookingStatus;
+import se325.assignment01.concert.service.config.Config;
 import se325.assignment01.concert.service.domain.*;
 import se325.assignment01.concert.service.jaxrs.LocalDateTimeParam;
-import se325.assignment01.concert.service.mapper.BookingMapper;
 import se325.assignment01.concert.service.mapper.ConcertMapper;
-import se325.assignment01.concert.service.mapper.PerformerMapper;
 import se325.assignment01.concert.service.mapper.SeatMapper;
 
 import javax.persistence.EntityManager;
-import javax.persistence.LockModeType;
-import javax.persistence.OptimisticLockException;
 import javax.persistence.TypedQuery;
 import javax.ws.rs.*;
-import javax.ws.rs.container.AsyncResponse;
-import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.*;
-import java.net.URI;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 @Path("/concert-service")

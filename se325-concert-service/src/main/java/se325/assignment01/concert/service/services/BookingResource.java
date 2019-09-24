@@ -6,6 +6,7 @@ import se325.assignment01.concert.common.dto.BookingDTO;
 import se325.assignment01.concert.common.dto.BookingRequestDTO;
 import se325.assignment01.concert.common.dto.ConcertInfoNotificationDTO;
 import se325.assignment01.concert.common.dto.ConcertInfoSubscriptionDTO;
+import se325.assignment01.concert.service.config.Config;
 import se325.assignment01.concert.service.domain.Booking;
 import se325.assignment01.concert.service.domain.Concert;
 import se325.assignment01.concert.service.domain.Seat;

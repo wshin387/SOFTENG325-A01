@@ -3,13 +3,17 @@ package se325.assignment01.concert.service.mapper;
 import se325.assignment01.concert.common.dto.ConcertDTO;
 import se325.assignment01.concert.common.dto.ConcertSummaryDTO;
 import se325.assignment01.concert.service.domain.Concert;
+import sun.misc.Perf;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 public class ConcertMapper {
     public static ConcertDTO toDTO(Concert concert){
-        return new ConcertDTO(concert.getId(),concert.getTitle(),concert.getImage(),concert.getBlurb());
+        return new ConcertDTO(concert.getId(),concert.getTitle(),concert.getImage(),concert.getBlurb(),
+                new ArrayList<LocalDateTime>(concert.getDates()), PerformerMapper.setToDTO(concert.getPerformers()));
     }
 
     public static List<ConcertDTO> listToDTO(List<Concert> concerts) {

@@ -27,6 +27,10 @@ public class Booking {
         this.user = user;
     }
 
+    public Booking() {
+
+    }
+
     public Long getId() {
         return id;
     }

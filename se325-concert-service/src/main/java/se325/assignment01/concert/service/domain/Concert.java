@@ -1,6 +1,8 @@
 package se325.assignment01.concert.service.domain;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 
 import javax.persistence.*;
@@ -75,7 +77,7 @@ public class Concert {
     }
 
     public Set<LocalDateTime> getDates() {
-        return dates;
+        return this.dates;
     }
 
     public Long getId() {
@@ -95,7 +97,7 @@ public class Concert {
     }
 
     public Set<Performer> getPerformers() {
-        return performers;
+        return this.performers;
     }
 
 

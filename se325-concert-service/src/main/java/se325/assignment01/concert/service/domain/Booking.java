@@ -1,6 +1,7 @@
 package se325.assignment01.concert.service.domain;
 
 import javax.persistence.*;
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Entity
@@ -10,11 +11,21 @@ public class Booking {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    private LocalDateTime date;
+    private Long concertId;
+
     @ManyToMany(cascade = CascadeType.PERSIST)
     private List<Seat> seatList;
 
-    @ElementCollection
-    private List<String> userIdList;
+    @ManyToOne
+    private User user;
+
+    public Booking(Long concertId, LocalDateTime date, List<Seat> seatList, User user) {
+        this.date = date;
+        this.concertId = concertId;
+        this.seatList = seatList;
+        this.user = user;
+    }
 
     public Long getId() {
         return id;
@@ -40,12 +51,27 @@ public class Booking {
         this.seatList = seatList;
     }
 
-    public List<String> getUserIdList() {
-        return userIdList;
+    public LocalDateTime getDate() {
+        return date;
     }
 
-    public void setUserIdList(List<String> userIdList) {
-        this.userIdList = userIdList;
+    public void setDate(LocalDateTime date) {
+        this.date = date;
     }
 
+    public Long getConcertId() {
+        return concertId;
+    }
+
+    public void setConcertId(Long concertId) {
+        this.concertId = concertId;
+    }
+
+    public User getUser() {
+        return user;
+    }
+
+    public void setUser(User user) {
+        this.user = user;
+    }
 }

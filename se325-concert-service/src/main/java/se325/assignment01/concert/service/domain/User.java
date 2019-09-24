@@ -20,10 +20,12 @@ public class User {
     private String password;
 
     @Column(name="VERSION")
+    @Version
     private Long version;
 
     @Column(name="COOKIE")
     private String cookie;
+
 
     public String getCookie() {
         return cookie;

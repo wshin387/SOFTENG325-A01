@@ -12,21 +12,30 @@ import se325.assignment01.concert.service.mapper.PerformerMapper;
 import se325.assignment01.concert.service.mapper.SeatMapper;
 
 import javax.persistence.EntityManager;
+import javax.persistence.LockModeType;
 import javax.persistence.TypedQuery;
 import javax.ws.rs.*;
+import javax.ws.rs.container.AsyncResponse;
+import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.*;
 import java.net.URI;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 
 @Path("/concert-service")
 public class ConcertResource {
 
     private static Logger LOGGER = LoggerFactory.getLogger(ConcertResource.class);
+    private ExecutorService executorService = Executors.newCachedThreadPool();
 
+    private static final Map<Long, List<Subscription>> subscriptionMap = new ConcurrentHashMap<>();
 
     @GET
     @Path("/concerts/{id}")
@@ -65,7 +74,7 @@ public class ConcertResource {
 
             TypedQuery<Concert> concertQuery = em.createQuery("select c from Concert c", Concert.class);
             List<Concert> concertList = concertQuery.getResultList();
-            List<ConcertDTO> concertDTOList = concertList.stream().map(c -> ConcertMapper.toDTO(c)).collect(Collectors.toList());
+            List<ConcertDTO> concertDTOList = ConcertMapper.listToDTO(concertList);
             entity = new GenericEntity<List<ConcertDTO>>(concertDTOList){};
         } finally {
             em.close();
@@ -154,39 +163,35 @@ public class ConcertResource {
         String username = userDTO.getUsername();
         String password = userDTO.getPassword();
         EntityManager em = PersistenceManager.instance().createEntityManager();
+        Response response;
 
         try {
             LOGGER.info("Attempting Login");
             em.getTransaction().begin();
-            TypedQuery<User> userQuery = em.createQuery("select u from User u ",User.class);
-            List<User> userList = userQuery.getResultList();
 
-            boolean verified = false;
-            User user = null;
-            for (User u: userList){
-                if ((u.getPassword().equals(password)) && (u.getUsername().equals(username))) {
-                    verified = true;
-                    user = u;
-                    break;
-                }
+            TypedQuery<User> query = em.createQuery("select u from User u where u.username = :inputUserName AND u.password = :inputPassword", User.class)
+                .setParameter("inputUserName", username)
+                .setParameter("inputPassword", password)
+                .setLockMode(LockModeType.OPTIMISTIC);
+
+            User user = query.getResultList().stream().findFirst().orElse(null);
+            if (user == null ){
+                response = Response.status(Response.Status.UNAUTHORIZED).build();
+            } else {
+
+                NewCookie cookie = new NewCookie(Config.AUTH_COOKIE, UUID.randomUUID().toString());
+                user.setCookie(cookie.getValue());
+                response = Response.ok().cookie(cookie).build();
+                em.merge(user);
+                em.getTransaction().commit();
             }
 
-            if (!verified){
-                LOGGER.info("Login failed");
-                return Response.status(Response.Status.UNAUTHORIZED).build();
-            }
-            LOGGER.info("Login successful");
 
-            newCookie = new NewCookie(Config.AUTH_COOKIE, UUID.randomUUID().toString());
-            user.setCookie(newCookie.getValue());
-
-            em.merge(user);
-            em.getTransaction().commit();
         } finally {
             em.close();
         }
 
-        return Response.ok().cookie(newCookie).build();
+        return response;
     }
 
 
@@ -199,6 +204,7 @@ public class ConcertResource {
         }
 
         Booking booking;
+        int numberOfSeats, numberOfAvailableSeats;
         EntityManager em = PersistenceManager.instance().createEntityManager();
 
         try {
@@ -243,10 +249,10 @@ public class ConcertResource {
             //get number of remaining available seats
             TypedQuery<Seat> availableSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate and s.isBooked = false ", Seat.class)
                     .setParameter("requestDate",bookingRequestDTO.getDate());
-            int numberOfAvailableSeats = availableSeatsQuery.getResultList().size();
+            numberOfAvailableSeats = availableSeatsQuery.getResultList().size();
 
             TypedQuery<Seat> allSeatsQuery = em.createQuery("select s from Seat s where s.date = :requestDate",Seat.class).setParameter("requestDate",bookingRequestDTO.getDate());
-            int numberOfSeats = allSeatsQuery.getResultList().size();
+            numberOfSeats = allSeatsQuery.getResultList().size();
 
             booking = new Booking(bookingRequestDTO.getConcertId(),bookingRequestDTO.getDate(),seatList,user);
             em.persist(booking);
@@ -258,6 +264,7 @@ public class ConcertResource {
         }
 
         //return Response.status(Response.Status.CREATED).build();
+        this.notifySubcribers(numberOfAvailableSeats, numberOfSeats, bookingRequestDTO.getConcertId(), bookingRequestDTO.getDate());
         return Response.created(URI.create("concert-service/bookings/"+booking.getId())).cookie(appendCookie(cookie)).build();
     }
 
@@ -378,4 +385,97 @@ public class ConcertResource {
     private NewCookie appendCookie(Cookie clientCookie){
         return new NewCookie(Config.AUTH_COOKIE, clientCookie.getValue());
     }
+
+    @POST
+    @Path("/subscribe/concertInfo")
+    @Consumes(MediaType.APPLICATION_JSON)
+    @Produces(MediaType.APPLICATION_JSON)
+    public void concertInfoSubcribe(@Suspended AsyncResponse response, @CookieParam(Config.AUTH_COOKIE)Cookie cookie, ConcertInfoSubscriptionDTO concertInfoSubscriptionDTO){
+        EntityManager em = PersistenceManager.instance().createEntityManager();
+        if (cookie == null){
+            executorService.submit(()->{
+                response.resume(Response.status(Response.Status.UNAUTHORIZED).build());
+            });
+            return;
+        }
+        try{
+            em.getTransaction().begin();
+
+            TypedQuery<User> userQuery = em.createQuery("select u from User u where u.cookie = :cookie", User.class)
+                    .setParameter("cookie", cookie.getValue());
+            User user = userQuery.getResultList().stream().findFirst().orElse(null); //gets a single user
+
+            if (user == null){
+                executorService.submit(()-> {
+                    response.resume(Response.status(Response.Status.UNAUTHORIZED).build());
+                });
+                return;
+            }
+
+            long id = concertInfoSubscriptionDTO.getConcertId();
+            Concert concert = em.find(Concert.class,id);
+            if (concert == null){
+
+                executorService.submit(()-> {
+                    response.resume(Response.status(Response.Status.BAD_REQUEST).build());
+                });
+                return;
+            }
+            if (!concert.getDates().contains(concertInfoSubscriptionDTO.getDate())){
+                executorService.submit(()-> {
+                    response.resume(Response.status(Response.Status.BAD_REQUEST).build());
+                });
+                return;
+            }
+            //valid subscription info add sub to user
+            List<Subscription> subs = subscriptionMap.getOrDefault(concert.getId(), new ArrayList<>());
+            subs.add(new Subscription(concertInfoSubscriptionDTO, response));
+            subscriptionMap.put(concert.getId(),subs);
+        }finally {
+            em.close();
+        }
+    }
+
+    public void notifySubcribers(int numRemainingSeats, int totalSeats, long concertId, LocalDateTime date){
+        List<Subscription> subs = subscriptionMap.get(concertId);
+        if (subs == null){
+            return;
+        }
+        List<Subscription> newSubs = new ArrayList<>();
+        for (Subscription sub : subs){
+            ConcertInfoSubscriptionDTO info = sub.getConcertInfoSubscriptionDTO();
+            if (info.getDate().isEqual(date)){
+                if (info.getPercentageBooked() < 100 - (numRemainingSeats*100)/totalSeats){
+                    AsyncResponse response = sub.getResponse();
+                    synchronized (response){
+                        ConcertInfoNotificationDTO notification = new ConcertInfoNotificationDTO(numRemainingSeats);
+                        response.resume(Response.ok(notification).build());
+                    }
+                } else {
+                    newSubs.add(sub);
+                }
+            } else {
+                newSubs.add(sub);
+            }
+        }
+        subscriptionMap.put(concertId, newSubs);
+    }
+}
+
+/** Encapsulates a concertInfoSubcriptionDTO and its associated async response
+ *  Stored in subcriber map where it is used in notifysubscribers()
+ */
+class Subscription{
+
+    private ConcertInfoSubscriptionDTO concertInfoSubscriptionDTO;
+    private AsyncResponse response;
+
+    public Subscription(ConcertInfoSubscriptionDTO concertInfoSubscriptionDTO, AsyncResponse response){
+        this.concertInfoSubscriptionDTO = concertInfoSubscriptionDTO;
+        this.response = response;
+    }
+
+    public AsyncResponse getResponse(){ return this.response; }
+    public ConcertInfoSubscriptionDTO getConcertInfoSubscriptionDTO(){ return this.concertInfoSubscriptionDTO; }
+
 }

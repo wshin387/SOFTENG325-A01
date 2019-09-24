@@ -32,13 +32,11 @@ public class ConcertDTO {
     public ConcertDTO() {
     }
 
-    public ConcertDTO(Long id, String title, String imageName, String blurb, List<LocalDateTime> dates, List<PerformerDTO> performers) {
+    public ConcertDTO(Long id, String title, String imageName, String blurb) {
         this.id = id;
         this.title = title;
         this.imageName = imageName;
         this.blurb = blurb;
-        this.dates = dates;
-        this.performers = performers;
     }
 
     public ConcertDTO(String title, String imageName) {

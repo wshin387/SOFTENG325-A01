@@ -12,8 +12,10 @@ import java.util.Set;
 
 public class ConcertMapper {
     public static ConcertDTO toDTO(Concert concert){
-        return new ConcertDTO(concert.getId(),concert.getTitle(),concert.getImage(),concert.getBlurb(),
-                new ArrayList<LocalDateTime>(concert.getDates()), PerformerMapper.setToDTO(concert.getPerformers()));
+        ConcertDTO result = new ConcertDTO(concert.getId(),concert.getTitle(),concert.getImage(),concert.getBlurb());
+        result.setDates(new ArrayList<LocalDateTime>(concert.getDates()));
+        result.setPerformers(PerformerMapper.setToDTO(concert.getPerformers()));
+        return result;
     }
 
     public static List<ConcertDTO> listToDTO(List<Concert> concerts) {

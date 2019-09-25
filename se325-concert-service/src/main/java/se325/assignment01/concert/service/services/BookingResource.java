@@ -38,6 +38,10 @@ public class BookingResource {
     private ExecutorService executorService = Executors.newCachedThreadPool();
     private static final Map<Long, List<Subscription>> subscribersMap = new ConcurrentHashMap<>(); //ConcertId to List of Subscriptions
 
+    /*
+     * Returns a User from the database whose cookie matches the cookie given as argument.
+     * If no such user can be found, null is returned.
+     */
     private User getAuthenticatedUser(EntityManager em, Cookie cookie) {
         TypedQuery<User> userQuery = em.createQuery("select u from User u where u.cookie = :cookie", User.class)
                 .setParameter("cookie", cookie.getValue());
@@ -50,7 +54,9 @@ public class BookingResource {
         return new NewCookie(Config.AUTH_COOKIE, clientCookie.getValue());
     }
 
-
+    /**
+     * Attempts to make a booking. Also notifies all subscribers of the concert that is being booked.
+     */
     @POST
     @Path("/bookings")
     @Consumes(MediaType.APPLICATION_JSON)
@@ -61,6 +67,7 @@ public class BookingResource {
         }
 
         Booking booking;
+        //int variables used as inputs for notifySubscribers()
         int availableNumberOfSeats;
         int totalNumberOfSeats;
         EntityManager em = PersistenceManager.instance().createEntityManager();
@@ -111,6 +118,11 @@ public class BookingResource {
         return Response.created(URI.create("concert-service/bookings/"+booking.getId())).cookie(appendCookie(cookie)).build();
     }
 
+    /*
+    Persist modification of relevant seats to the database.
+    Skips the user authentication query
+    Called within tryMakeBooking()
+     */
     private Booking makeBooking(BookingRequestDTO bookingRequestDTO, User user){
         EntityManager em = PersistenceManager.instance().createEntityManager();
         Booking booking;
@@ -140,17 +152,20 @@ public class BookingResource {
 
         } catch (OptimisticLockException e) {
             em.close();
-            booking = this.makeBooking(bookingRequestDTO, user); //retry
+            booking = this.makeBooking(bookingRequestDTO, user); //retry, skip authentication of user
         } finally {
             em.close();
         }
         return booking;
     }
 
+    /*
+    Returns bookings made by a client filtered by Booking id
+     */
     @GET
     @Path("/bookings/{id}")
     @Produces(MediaType.APPLICATION_JSON)
-    public Response getBookingsByClientId(@PathParam("id") long id, @CookieParam(Config.AUTH_COOKIE) Cookie cookie){
+    public Response getBookingsById(@PathParam("id") long id, @CookieParam(Config.AUTH_COOKIE) Cookie cookie){
         if (cookie == null) {
             return Response.status(Response.Status.UNAUTHORIZED).build();
         }
@@ -206,8 +221,8 @@ public class BookingResource {
             }
 
             //get all bookings
-            TypedQuery<Booking> bookingQuery = em.createQuery("select b from Booking b where b.user = :user", Booking.class);
-            bookingQuery.setParameter("user", user);
+            TypedQuery<Booking> bookingQuery = em.createQuery("select b from Booking b where b.user = :user", Booking.class)
+                .setParameter("user", user);
             List<Booking> bookingList = bookingQuery.getResultList();
 
             //convert to List of BookingDTOs
@@ -249,6 +264,7 @@ public class BookingResource {
             long id = concertInfoSubscriptionDTO.getConcertId();
             Concert concert = em.find(Concert.class,id);
 
+            //if no such concert exists
             if (concert == null){
                 executorService.submit(()-> {
                     response.resume(Response.status(Response.Status.BAD_REQUEST).build());
@@ -256,6 +272,7 @@ public class BookingResource {
                 return;
             }
 
+            //if no such date exist
             if (!concert.getDates().contains(concertInfoSubscriptionDTO.getDate())) {
                 executorService.submit(()-> {
                     response.resume(Response.status(Response.Status.BAD_REQUEST).build());

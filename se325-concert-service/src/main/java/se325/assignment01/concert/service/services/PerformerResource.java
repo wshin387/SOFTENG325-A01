@@ -36,6 +36,7 @@ public class PerformerResource {
             em.getTransaction().begin();
             Performer performer = em.find(Performer.class, id);
 
+            //if no such performer exists
             if (performer == null) {
                 return Response.status(Response.Status.NOT_FOUND).build();
             }
@@ -53,20 +54,20 @@ public class PerformerResource {
     @Produces(MediaType.APPLICATION_JSON)
     public Response getAllPerformers() {
         LOGGER.info("Retrieving all Performers");
-        List<Performer> performerList = new ArrayList<>();
         List<PerformerDTO> performerDTOList;
         EntityManager em = PersistenceManager.instance().createEntityManager();
 
         try{
             em.getTransaction().begin();
             TypedQuery<Performer> performerQuery = em.createQuery("select p from Performer p",Performer.class);
-            performerList = performerQuery.getResultList();
+            List<Performer> performerList = performerQuery.getResultList();
+
             if (performerList == null){
                 return Response.status(Response.Status.NOT_FOUND).build();
             }
 
             em.getTransaction().commit();
-            performerDTOList = PerformerMapper.listToDTO(performerList);
+            performerDTOList = PerformerMapper.listToDTO(performerList); //convert list of performers to list of performerDTOs
         } finally {
             em.close();
         }

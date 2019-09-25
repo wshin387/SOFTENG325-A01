@@ -18,7 +18,6 @@ import javax.ws.rs.core.*;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Path("/concert-service")
 public class ConcertResource {
@@ -39,6 +38,7 @@ public class ConcertResource {
 
             concert = em.find(Concert.class, id);
 
+            //if no such concert exists
             if (concert == null) {
                 return Response.status(Response.Status.NOT_FOUND).build();
             }
@@ -61,10 +61,10 @@ public class ConcertResource {
             em.getTransaction().begin();
 
             TypedQuery<Concert> concertQuery = em.createQuery("select c from Concert c", Concert.class);
+
             List<Concert> concertList = concertQuery.getResultList();
-            List<ConcertDTO> concertDTOList = ConcertMapper.listToDTO(concertList);
-            entity = new GenericEntity<List<ConcertDTO>>(concertDTOList) {
-            };
+            List<ConcertDTO> concertDTOList = ConcertMapper.listToDTO(concertList); //Convert list of concerts to list of ConcertDTOs
+            entity = new GenericEntity<List<ConcertDTO>>(concertDTOList) {};
         } finally {
             em.close();
         }
@@ -154,12 +154,9 @@ public class ConcertResource {
                         .setParameter("date", date);
             }
 
-            LOGGER.info("retrieved " + seatQuery.getResultList());
-
             List<Seat> bookedSeatList = seatQuery.getResultList();
             List<SeatDTO> bookedDTOSeatList = SeatMapper.listToDTO(bookedSeatList);
-            entity = new GenericEntity<List<SeatDTO>>(bookedDTOSeatList) {
-            };
+            entity = new GenericEntity<List<SeatDTO>>(bookedDTOSeatList) {};
 
         } finally {
             em.close();

@@ -1,4 +1,10 @@
 SOFTENG 325 Assignment 01 - A Concert Booking Service
+
+
+Grade Achieved: 15.6/16
+
+Full marks weren't awarded due to a lack of comments.
+
 ==========
 **NOTE:** This README contains the same content as the **PDF** handout you are given.
 
